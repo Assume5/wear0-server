@@ -10,11 +10,11 @@
 
 ## MySQL
 
-##### You may download MySQL through [MySQL Site]("https://dev.mysql.com/downloads/windows/installer/8.0.html"). Make sure you download the installer itself (not web base installer).
+##### You may download MySQL through [MySQL Site](https://dev.mysql.com/downloads/windows/installer/8.0.html). Make sure you download the installer itself (not web base installer).
 
 ## Node.js
 
-##### You may download Node.js through [Nodejs Site]("https://nodejs.org/en/").
+##### You may download Node.js through [Nodejs Site](https://nodejs.org/en/).
 
 ## Using the app
 
