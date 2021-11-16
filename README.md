@@ -4,7 +4,7 @@
 
 ## Requirement
 
-##### MySQL Downloaded
+##### MySQL
 
 ##### Node.js version >= 14.17
 
