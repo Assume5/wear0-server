@@ -19,7 +19,7 @@
 ## Using the app
 
 ```
-    cd wear0-server
-    npm install
-    npm start
+cd wear0-server
+npm install
+npm start
 ```
