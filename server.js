@@ -1,7 +1,6 @@
 const express = require("express");
 const bodyParser = require("body-parser"); //https://www.npmjs.com/package/body-parser
 const bcrypt = require("bcrypt"); //https://www.npmjs.com/package/bcrypt
-const cookie = require("cookie"); //https://www.npmjs.com/package/cookie
 const escapeHtml = require("escape-html"); //https://www.npmjs.com/package/escape-html
 const cors = require("cors"); //https://www.npmjs.com/package/cors
 const mysql = require("mysql"); //https://www.npmjs.com/package/mysql
@@ -12,6 +11,9 @@ app.use(bodyParser.urlencoded({ extended: false }));
 // parse application/json
 app.use(bodyParser.json());
 app.use(cors());
+
+const saltRounds = 15;
+const salt = bcrypt.genSaltSync(saltRounds);
 
 /* 
     ERROR:Client does not support authentication protocol requested by server; consider upgrading MySQL client
@@ -57,7 +59,8 @@ function mysqlInit() {
           state varchar(100),
           zip varchar(100),
           password varchar(200) not null,
-          joineddate varchar(100) not null
+          joineddate varchar(100) not null,
+          hashedId varchar(500) not null
       )`;
     let createGuestCart = `create table if not exists guestcart(
           id int primary key auto_increment,
@@ -140,8 +143,16 @@ function checkIfExists(table, col, value) {
     });
 }
 
-function handleLogin(email, password) {
-    let sql = `SELECT * FROM users WHERE email = '${email}' AND password = '${password}'`;
+function encryptValue(value) {
+    return bcrypt.hashSync(value, salt);
+}
+
+function compareEncryptValue(plainText, hashedText) {
+    return bcrypt.compareSync(plainText, hashedText);
+}
+
+function handleLogin(email) {
+    let sql = `SELECT * FROM users WHERE email = '${email}'`;
     console.log(sql);
     return new Promise((resolve, reject) => {
         connection.query(sql, (err, result) => {
@@ -152,6 +163,10 @@ function handleLogin(email, password) {
         });
     });
 }
+
+app.get("/", (req, res) => {
+    res.send("WEAR0 Server");
+});
 
 app.post("/register", (req, res) => {
     let email = req.body.email;
@@ -173,13 +188,29 @@ app.post("/register", (req, res) => {
     checkIfExists("users", "email", email)
         .then((result) => {
             let check = result;
-            let sql = `INSERT INTO users (fullname, email, password,joineddate) VALUES ('${name}', '${email}', '${password}', '${date}')`;
+
             if (!check) {
-                connection.query(sql, (err, result) => {
+                let hashedId;
+                let hashedPassword = encryptValue(password);
+                let lastId = "SELECT id FROM users ORDER BY id DESC LIMIT 1";
+                connection.query(lastId, (err, result) => {
                     if (err) {
                         console.log(err);
                     }
+                    if (result.length === 0) {
+                        let id = 1;
+                        hashedId = encryptValue(id.toString());
+                    } else {
+                        hashedId = encryptValue(result[0].id.toString());
+                    }
+                    let sql = `INSERT INTO users (fullname, email, password,joineddate, hashedId) VALUES ('${name}', '${email}', '${hashedPassword}', '${date}', '${hashedId}')`;
+                    connection.query(sql, (err, result) => {
+                        if (err) {
+                            console.log(err);
+                        }
+                    });
                 });
+
                 res.json(true);
             } else if (check) res.json("Email has been registered");
         })
@@ -191,15 +222,14 @@ app.post("/register", (req, res) => {
 app.post("/login", (req, res) => {
     let email = req.body.email;
     let password = req.body.password;
-    let rememberMe = req.body.rememberMe;
-    handleLogin(email, password).then((result) => {
-        let fullName = result[0].fullname;
-        let id = result[0].id;
-        let success = result.length === 1;
+    handleLogin(email).then((result) => {
+        let success = false;
+        if (result.length) {
+            success = compareEncryptValue(password, result[0].password);
+        }
         if (success) {
-            if (rememberMe) {
-                //set cookie
-            }
+            let fullName = result[0].fullname;
+            let id = result[0].id;
             res.json({
                 success: true,
                 fullname: fullName,

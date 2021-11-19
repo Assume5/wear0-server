@@ -6,10 +6,10 @@
   "dependencies": {
     "bcrypt": "^5.0.1",
     "body-parser": "^1.19.0",
-    "cookie": "^0.4.1",
     "cors": "^2.8.5",
     "escape-html": "^1.0.3",
     "express": "^4.17.1",
+    "js-cookie": "^3.0.1",
     "mysql": "^2.18.1",
     "nodemon": "^2.0.15"
   },
