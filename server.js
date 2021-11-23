@@ -11,11 +11,13 @@ app.use(bodyParser.urlencoded({ extended: false }));
 // parse application/json
 app.use(bodyParser.json());
 app.use(cors());
+app.use(express.static(__dirname + "/public"));
 
 const saltRounds = 15;
 const salt = bcrypt.genSaltSync(saltRounds);
 
 /* 
+
     ERROR:Client does not support authentication protocol requested by server; consider upgrading MySQL client
 
     If you run into this error using the following code execute it in mysql workbench
@@ -123,10 +125,10 @@ function mysqlInit() {
    INSERT INTO product (productId, productName, productImg1, productImg2,productImg3,productImg4,
 productSize,productColor,productMaterial,productDesc,productPrice,productCheckout,productCategory,
 productBrand)
-VALUES ('532462','CALIENTE TACO TUESDAY','/TestingImage/532462-1','/TestingImage/532462-1','',
-'','multisize','Brown/Red','cotton',
-'The Puma Caliente hoodie is the perfect addition to your Puma collection',
-65.00,0,'MensApparel','PUMA');
+VALUES ('1-45','Kaws Brown','','/TestingImage/532462-1','',
+'','multisize','Brown','Vinyl',
+'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Etiam sit amet nisl purus. Bibendum enim facilisis gravida neque convallis a. Faucibus nisl tincidunt eget nullam non nisi est sit. Sem fringilla ut morbi tincidunt.',
+99.99,0,'Accessories','KAWS');
 */
 
 function checkIfExists(table, col, value) {
@@ -166,6 +168,12 @@ function handleLogin(email) {
 
 app.get("/", (req, res) => {
     res.send("WEAR0 Server");
+});
+
+app.get("/public/productImages/:id/:image", (req, res) => {
+    let id = req.params.id
+    let imageFile = req.params.image
+    res.sendFile(`public/productImages/${id}/${imageFile}` , { root : __dirname});
 });
 
 app.post("/register", (req, res) => {
@@ -229,7 +237,7 @@ app.post("/login", (req, res) => {
         }
         if (success) {
             let fullName = result[0].fullname;
-            let id = result[0].id;
+            let id = result[0].hashedId;
             res.json({
                 success: true,
                 fullname: fullName,
@@ -239,10 +247,6 @@ app.post("/login", (req, res) => {
             res.json("Email or Password incorrect");
         }
     });
-});
-
-app.post("/checkLogin", (req, res) => {
-    //checkcookie
 });
 
 app.listen(8080, function () {
