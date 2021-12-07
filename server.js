@@ -5,6 +5,7 @@ const escapeHtml = require("escape-html"); //https://www.npmjs.com/package/escap
 const cors = require("cors"); //https://www.npmjs.com/package/cors
 const mysql = require("mysql"); //https://www.npmjs.com/package/mysql
 const app = express();
+const sqlInit = require("./db.js");
 
 // parse application/x-www-form-urlencoded
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -33,103 +34,12 @@ const salt = bcrypt.genSaltSync(saltRounds);
 
 */
 
-var connection;
-
-function mysqlInit() {
-    //modify host, user, password, and database to yours.
-    connection = mysql.createConnection({
-        host: "localhost",
-        user: "root",
-        password: "root",
-        database: "wear0",
-    });
-    let createGuest = `create table if not exists guest(
-            id int primary key auto_increment,
-            cookievalue varchar(500) unique not null,
-            joineddate varchar(100) not null
-        )`;
-    let createUsers = `create table if not exists users(
-          id int primary key auto_increment,
-          email varchar(100) unique not null,
-          fullname varchar(100),
-          first varchar(100),
-          last varchar(100),
-          phone varchar(100),
-          address1 varchar(100),
-          address2 varchar(100) ,
-          city varchar(100),
-          state varchar(100),
-          zip varchar(100),
-          password varchar(200) not null,
-          joineddate varchar(100) not null,
-          hashedId varchar(500) not null
-      )`;
-    let createGuestCart = `create table if not exists guestcart(
-          id int primary key auto_increment,
-          ownercookievalue varchar(500) not null,
-          productid varchar(100) not null,
-          productImage varchar(200) not null,
-          productName varchar(50) not null,
-          productPrice SMALLINT not null,
-          quantity TINYINT not null
-        )`;
-    let createCart = `create table if not exists cart(
-            id int primary key auto_increment,
-            user varchar(500) not null,
-            productid varchar(100) not null,
-            productImage varchar(200) not null,
-            productName varchar(50) not null,
-            productPrice SMALLINT not null,
-            quantity TINYINT not null
-        )`;
-    let createProduct = `create table if not exists product(
-          id int primary key auto_increment,
-          productId varchar(50) unique not null,
-          productName varchar(50) not null,
-          productImg1 varchar(200),
-          productImg2 varchar(200),
-          productImg3 varchar(200),
-          productImg4 varchar(200),
-          productSize varchar(20) not null,
-          productColor varchar(100) not null,
-          productMaterial varchar(20) not null,
-          productDesc varchar(200) not null,
-          productPrice SMALLINT not null,
-          productCheckout SMALLINT not null,
-          productCategory varchar(20) not null,
-          productBrand varchar(100) not null
-        )`;
-    let createProductStock = `create table if not exists stock(
-          id int primary key auto_increment,
-          productId varchar(50) not null,
-          productSize varchar(50) not null,
-          productSizeStock SMALLINT not null
-        )`;
-    let query = [
-        createGuest,
-        createUsers,
-        createGuestCart,
-        createCart,
-        createProduct,
-        createProductStock,
-    ];
-    for (let i = 0; i < query.length; i++) {
-        connection.query(query[i], function (err, results, fields) {
-            if (err) {
-                console.log(err.message);
-            }
-        });
-    }
-}
-/*
-   INSERT INTO product (productId, productName, productImg1, productImg2,productImg3,productImg4,
-productSize,productColor,productMaterial,productDesc,productPrice,productCheckout,productCategory,
-productBrand)
-VALUES ('1-45','Kaws Brown','','/TestingImage/532462-1','',
-'','multisize','Brown','Vinyl',
-'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Etiam sit amet nisl purus. Bibendum enim facilisis gravida neque convallis a. Faucibus nisl tincidunt eget nullam non nisi est sit. Sem fringilla ut morbi tincidunt.',
-99.99,0,'Accessories','KAWS');
-*/
+//modify host, user, password, and database to yours.
+var connection = mysql.createConnection({
+    host: "localhost",
+    user: "root",
+    password: "root",
+});
 
 function checkIfExists(table, col, value) {
     let sql = `SELECT * FROM ${table} WHERE ${col} = '${value}'`;
@@ -166,20 +76,34 @@ function handleLogin(email) {
     });
 }
 
+function retrieveDataHome(table) {
+    let sql = `SELECT a.*, SUM(b.productSizeStock) AS totalStock FROM products a JOIN stock b on a.productId = b.productId GROUP BY productId`;
+    return new Promise((resolve, reject) => {
+        connection.query(sql, (err, result) => {
+            if (err) {
+                console.log(err);
+            }
+            resolve(result);
+        });
+    });
+}
+
 app.get("/", (req, res) => {
     res.send("WEAR0 Server");
 });
 
 app.get("/public/productImages/:id/:image", (req, res) => {
-    let id = req.params.id
-    let imageFile = req.params.image
-    res.sendFile(`public/productImages/${id}/${imageFile}` , { root : __dirname});
+    let id = req.params.id;
+    let imageFile = req.params.image;
+    res.sendFile(`public/productImages/${id}/${imageFile}`, {
+        root: __dirname,
+    });
 });
 
 app.post("/register", (req, res) => {
-    let email = req.body.email;
-    let name = req.body.name;
-    let password = req.body.password;
+    let email = escapeHtml(req.body.email);
+    let name = escapeHtml(req.body.name);
+    let password = escapeHtml(req.body.password);
     let today = new Date();
     let date =
         today.getFullYear() +
@@ -228,8 +152,8 @@ app.post("/register", (req, res) => {
 });
 
 app.post("/login", (req, res) => {
-    let email = req.body.email;
-    let password = req.body.password;
+    let email = escapeHtml(req.body.email);
+    let password = escapeHtml(req.body.password);
     handleLogin(email).then((result) => {
         let success = false;
         if (result.length) {
@@ -249,7 +173,51 @@ app.post("/login", (req, res) => {
     });
 });
 
+app.get("/productHome", (req, res) => {
+    retrieveDataHome("products").then((result) => {
+        let returnJson = {};
+        for (let i = 0; i < result.length; i++) {
+            let data = result[i];
+            if (!returnJson[data.productCategory]) {
+                returnJson[data.productCategory] = [];
+            }
+            let appendData = {};
+            for (let j in data) {
+                appendData[j] = data[j];
+            }
+            returnJson[data.productCategory].push(appendData);
+        }
+        res.json(returnJson);
+    });
+});
+
+app.get("/fetch/:category", (req, res) => {
+    let category = req.params.category;
+    let sql = `SELECT a.*, SUM(b.productSizeStock) AS totalStock FROM products a JOIN stock b on a.productId = b.productId and productCategory ='${category}' GROUP BY productId;`;
+    connection.query(sql, (err, result) => {
+        if (err) {
+            console.log(err);
+        }
+        res.json(result);
+    });
+});
+
+app.get("/filter/:category", (req, res) => {
+    console.log(1);
+    let category = req.params.category;
+    let sql = `SELECT a.productId, a.productBrand, a.productColor, b.productSize FROM products a JOIN stock b on a.productId = b.productId and productCategory ='${category}';`;
+    connection.query(sql, (err, result) => {
+        if (err) {
+            console.log(err);
+        }
+        console.log(result);
+        res.json(result);
+    });
+});
+
+//SELECT a.productId, a.productBrand, a.productColor, b.productSize FROM products a JOIN stock b on a.productId = b.productId and productCategory ='New';
+
 app.listen(8080, function () {
     console.log("Listing port 8080");
-    mysqlInit(); //this will create table if not yet inserted
+    sqlInit.mysqlInit(connection); //this will create table if not yet inserted
 });
