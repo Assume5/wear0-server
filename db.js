@@ -1,10 +1,11 @@
 function mysqlInit(connection) {
     let createDatabase = `CREATE DATABASE IF NOT EXISTS wear0;`;
+    let removeSafeUpdates = "SET SQL_SAFE_UPDATES = 0;";
     let useDB = `USE wear0;`;
     let createGuest = `create table if not exists guest(
             id int primary key auto_increment,
             cookievalue varchar(500) unique not null,
-            joineddate varchar(100) not null
+            joineddate date not null
         )`;
     let createUsers = `create table if not exists users(
           id int primary key auto_increment,
@@ -19,8 +20,9 @@ function mysqlInit(connection) {
           state varchar(100),
           zip varchar(100),
           password varchar(200) not null,
-          joineddate varchar(100) not null,
-          hashedId varchar(500) not null
+          joineddate date not null,
+          hashedId varchar(500) not null,
+          sessionExpires date
       )`;
     let createGuestCart = `create table if not exists guestcart(
           id int primary key auto_increment,
@@ -29,6 +31,7 @@ function mysqlInit(connection) {
           productImage varchar(200) not null,
           productName varchar(50) not null,
           productPrice DOUBLE(10,2) not null,
+          productSize varchar(50) not null,
           quantity TINYINT not null
         )`;
     let createCart = `create table if not exists cart(
@@ -38,6 +41,7 @@ function mysqlInit(connection) {
             productImage varchar(200) not null,
             productName varchar(50) not null,
             productPrice DOUBLE(10,2) not null,
+            productSize varchar(50) not null,
             quantity TINYINT not null
         )`;
     let createProduct = `create table if not exists products(
