@@ -116,6 +116,54 @@ function getCartNumber(table, cookie) {
     });
 }
 
+function checkProductStock(productsDetail) {
+    return new Promise((resolve, reject) => {
+        let resArray = [];
+        let allItemAvailable = true;
+        let productNotAvailable = "";
+        let productNotAvailableSize;
+        for (let i in productsDetail) {
+            let product = productsDetail[i];
+            const {
+                productid,
+                productImage,
+                productName,
+                productPrice,
+                quantity,
+                productSize,
+            } = product;
+
+            connection.query(
+                `SELECT productId, productSizeStock, productSize from stock where productId = '${productid}' and productSize = '${productSize}'`,
+                (err, result) => {
+                    if (err) console.log(err);
+                    const stock = result[0].productSizeStock;
+                    const newStock = stock - quantity;
+                    if (newStock < 0) {
+                        productNotAvailable = result[0].productId;
+                        productNotAvailableSize = result[0].productSize;
+                        allItemAvailable = false;
+                    }
+                    resArray.push({
+                        productId: result[0].productId,
+                        productSizeStock: result[0].productSizeStock,
+                    });
+                }
+            );
+        }
+        const checkComplete = setInterval(() => {
+            if (resArray.length === productsDetail.length) {
+                clearInterval(checkComplete);
+                if (allItemAvailable) {
+                    resolve(allItemAvailable);
+                } else {
+                    resolve([productNotAvailable, productNotAvailableSize]);
+                }
+            }
+        }, 100);
+    });
+}
+
 app.get("/", (req, res) => {
     res.send("WEAR0 Server");
 });
@@ -360,7 +408,6 @@ app.post("/add-to-user-cart", (req, res) => {
 
 app.post("/transfer-cart", (req, res) => {
     let { guestCookie, userId } = req.body;
-    console.log(req.body);
     let success = true;
     connection.query(
         `SELECT * FROM GUESTCART WHERE OWNERCOOKIEVALUE='${guestCookie}'`,
@@ -377,7 +424,6 @@ app.post("/transfer-cart", (req, res) => {
                     productName,
                     productPrice,
                 } = res[i];
-                console.log(productid, userId);
                 let checkQuery = `SELECT * FROM cart WHERE user = '${userId}' and productid = '${productid}' and productSize = '${productSize}';`;
                 connection.query(checkQuery, (err, res) => {
                     if (err) {
@@ -447,10 +493,9 @@ app.post("/get-user-cart-information", (req, res) => {
     });
 });
 
-app.post("/update-cart", (req, res) => {
+app.put("/update-cart", (req, res) => {
     const { userId, guest, updateOn, productId, productSize, quantity } =
         req.body;
-    console.log(req.body);
     const table = `${guest === "true" ? "guestcart" : "cart"}`;
     const cookieColumn = `${guest === "true" ? "ownercookievalue" : "user"}`;
     if (updateOn === "remove") {
@@ -462,15 +507,19 @@ app.post("/update-cart", (req, res) => {
             res.json(true);
         });
     } else if (updateOn === "increase") {
-        let updateSql = `UPDATE ${table} SET quantity = ${quantity+1} WHERE ${cookieColumn} = '${userId}' and productId = '${productId}' and productSize = '${productSize}';`;
+        let updateSql = `UPDATE ${table} SET quantity = ${
+            quantity + 1
+        } WHERE ${cookieColumn} = '${userId}' and productId = '${productId}' and productSize = '${productSize}';`;
         connection.query(updateSql, (err, result) => {
             if (err) {
                 console.log(err);
             }
             res.json(true);
         });
-    }else {
-        let updateSql = `UPDATE ${table} SET quantity = ${quantity-1} WHERE ${cookieColumn} = '${userId}' and productId = '${productId}' and productSize = '${productSize}';`;
+    } else {
+        let updateSql = `UPDATE ${table} SET quantity = ${
+            quantity - 1
+        } WHERE ${cookieColumn} = '${userId}' and productId = '${productId}' and productSize = '${productSize}';`;
         connection.query(updateSql, (err, result) => {
             if (err) {
                 console.log(err);
@@ -478,11 +527,236 @@ app.post("/update-cart", (req, res) => {
             res.json(true);
         });
     }
-
-    // // updateOn will be increase decrease or remove.
 });
 
-//SELECT a.productId, a.productBrand, a.productColor, b.productSize FROM products a JOIN stock b on a.productId = b.productId and productCategory ='New';
+app.post("/checkout", (req, res) => {
+    let checkStock = true;
+    const {
+        shippingAddress,
+        billingAddress,
+        productsDetail,
+        totalPrice,
+        userId,
+        paymentInfo,
+        remember,
+        guestId,
+    } = req.body;
+    const orderId = Math.random().toString(16).slice(2).toUpperCase();
+    const email = shippingAddress.email;
+    const cardHolder = `${billingAddress.firstnameBilling} ${billingAddress.lastnameBilling}`;
+    const cardHolderFirst = billingAddress.firstnameBilling;
+    const cardHolderlast = billingAddress.lastnameBilling;
+    const phone = shippingAddress.phone;
+    const cardNumber = paymentInfo.cn;
+    const expiry = paymentInfo.ed;
+    const shippingName = `${shippingAddress.firstname} ${shippingAddress.lastname}`;
+    const shippingFirst = shippingAddress.firstname;
+    const shippingLast = shippingAddress.lastname;
+    const shippingAddress1 = shippingAddress.address;
+    const shippingAddress2 = shippingAddress.apartment;
+    const shippingCity = shippingAddress.city;
+    const shippingState = shippingAddress.state;
+    const shippingZip = shippingAddress.zip;
+    const billingAddress1 = billingAddress.addressBilling;
+    const billingCity = billingAddress.cityBilling;
+    const billingState = billingAddress.stateBilling;
+    const billingZip = billingAddress.zipBilling;
+    const today = getDate(0);
+
+    checkProductStock(productsDetail).then((stocks) => {
+        if (stocks === true) {
+            const orderSql = `INSERT INTO ORDERS VALUES('${orderId}','${userId}','${email}','${cardHolder}','${cardHolderFirst}','${cardHolderlast}','${phone}','${cardNumber}','${shippingName}','${shippingFirst}','${shippingLast}','${shippingAddress1}','${shippingAddress2}','${shippingCity}','${shippingState}','${shippingZip}','${billingAddress1}','${billingCity}','${billingState}','${billingZip}','${today}',
+            NULL, 'Pending', ${totalPrice})`;
+            connection.query(orderSql, (err, result) => {
+                if (err) {
+                    console.log(err);
+                }
+            });
+
+            for (let i in productsDetail) {
+                let product = productsDetail[i];
+                const {
+                    productid,
+                    productImage,
+                    productName,
+                    productPrice,
+                    quantity,
+                    productSize,
+                } = product;
+                const detailSql = `INSERT INTO orderdetails VALUES('${orderId}','${productid}','${productImage}','${productName}','${productPrice}','${productSize}','${quantity}')`;
+                connection.query(detailSql, (err, result) => {
+                    if (err) {
+                        console.log(err);
+                    }
+                });
+
+                //minus stock
+
+                connection.query(
+                    `SELECT productSizeStock from stock where productId = '${productid}' and productSize = '${productSize}'`,
+                    (err, result) => {
+                        if (err) console.log(err);
+                        const stock = result[0].productSizeStock;
+                        const newStock = stock - quantity;
+                        const updateQuery = `update stock set productSizeStock = ${newStock} where productId = '${productid}' and productSize = '${productSize}'`;
+                        connection.query(updateQuery, (err, result) => {
+                            if (err) console.log(err);
+                        });
+                    }
+                );
+            }
+
+            if (remember) {
+                const updateSql = `UPDATE USERS SET first = '${shippingAddress.firstname}', last = '${shippingAddress.lastname}', address1 = '${shippingAddress1}',
+        address2 = '${shippingAddress2}', city = '${shippingCity}', state = '${shippingState}', zip = '${shippingZip}', phone = ${phone}`;
+                connection.query(updateSql, (err, result) => {
+                    if (err) {
+                        console.log(err);
+                    }
+                });
+            }
+            //clear usercart
+            if (guestId === "None" && userId !== "None") {
+                //clear userCart
+                let sql = `DELETE FROM CART WHERE user = '${userId}'`;
+                connection.query(sql, (err, result) => {
+                    if (err) {
+                        console.log(err);
+                    }
+                });
+            }
+
+            if (guestId !== "None" && userId === "None") {
+                //clear guestCart
+                let sql = `DELETE FROM guestcart WHERE ownercookievalue = '${guestId}'`;
+                connection.query(sql, (err, result) => {
+                    if (err) {
+                        console.log(err);
+                    }
+                });
+            }
+            res.json([orderId, "true"]);
+        } else {
+            // remove
+            let productId = stocks[0];
+            let productSize = stocks[1];
+            //clear usercart
+            if (guestId === "None" && userId !== "None") {
+                //clear userCart
+                let sql = `DELETE FROM CART WHERE user = '${userId}' and productid = '${productId}' and productSize = '${productSize}'`;
+                connection.query(sql, (err, result) => {
+                    if (err) {
+                        console.log(err);
+                    }
+                });
+            }
+
+            if (guestId !== "None" && userId === "None") {
+                //clear guestCart
+                let sql = `DELETE FROM guestcart WHERE ownercookievalue = '${guestId}' and productid = '${productId}' and productSize = '${productSize}'`;
+                connection.query(sql, (err, result) => {
+                    if (err) {
+                        console.log(err);
+                    }
+                });
+            }
+            res.json([productId, "false"]);
+        }
+    });
+});
+
+app.post("/get-user-order", (req, res) => {
+    const userId = req.body.userId;
+    if (userId !== "") {
+        let sql = `SELECT email from users where hashedId = '${userId}'`;
+        connection.query(sql, (err, result) => {
+            if (err) {
+                console.log(err);
+            }
+            const email = result[0].email;
+            let sql = `SELECT orderId, DATE_FORMAT(orderDate, '%m/%d/%Y') as orderDate, orderStatus, totalPrice from orders where userId = '${userId}' or email = '${email}' order by orderDate DESC`;
+            connection.query(sql, (err, result) => {
+                if (err) console.log(err);
+                res.json(result);
+            });
+        });
+    }
+});
+
+app.post("/get-user-detail", (req, res) => {
+    const userId = req.body.userId;
+    if (userId !== "") {
+        let sql = `SELECT first, last, phone, address1, address2, city, state, zip from users where hashedId = '${userId}'`;
+        connection.query(sql, (err, result) => {
+            if (err) console.log(err);
+            res.json(result);
+        });
+    }
+});
+
+app.post("/autofill-checkout", (req, res) => {
+    const userId = req.body.userId;
+    if (userId !== "") {
+        let sql = `SELECT email, first as firstname, last as lastname, phone, address1 as address, address2 as apartment, city, state, zip from users where hashedId = '${userId}'`;
+        connection.query(sql, (err, result) => {
+            if (err) console.log(err);
+            res.json(result);
+        });
+    }
+});
+
+app.post("/update-user-detail", (req, res) => {
+    const { userId, inputData } = req.body;
+    if (userId !== "") {
+        let sql = `UPDATE users set first = '${inputData.first}', last = '${inputData.last}', phone = '${inputData.phone}', address1 = '${inputData.address1}', address2 = '${inputData.address2}', city = '${inputData.city}', state = '${inputData.state}', zip = '${inputData.zip}' where hashedId = '${userId}'`;
+        connection.query(sql, (err, result) => {
+            if (err) console.log(err);
+            res.json(true);
+        });
+    }
+});
+
+app.post("/check-order-exist", (req, res) => {
+    const { email, orderId } = req.body;
+    const sql = `SELECT * FROM ORDERS WHERE orderId = '${orderId}' and email = '${email}'`;
+    connection.query(sql, (err, result) => {
+        if (err) console.log(err);
+        if (result.length > 0) {
+            res.json("success");
+        } else {
+            res.json(
+                "We Can't Find Your Order, Please Double Check Your Order Number or Email"
+            );
+        }
+    });
+});
+
+app.get("/orders/:orderNumber", (req, res) => {
+    const orderNumber = req.params.orderNumber;
+    const sql = `select email, cardHolder, shippingName, phone, shippingAddress1, shippingAddress2, shippingCity, shippingState, shippingZip, billingAddress1, billingCity, billingState, billingZip, trackingNumber, orderStatus, totalPrice from orders where orderId = '${orderNumber}';`;
+    connection.query(sql, (err, result) => {
+        if (err) console.log(err);
+        res.json(result);
+    });
+});
+
+app.get("/get-last-four/:orderNumber", (req, res) => {
+    const orderNumber = req.params.orderNumber;
+    let sql = `select cardNumber from orders where orderId = '${orderNumber}'`;
+    connection.query(sql, (err, result) => {
+        if (err) console.log(err);
+        res.json(result[0].cardNumber.substr(16 - 4));
+    });
+});
+
+app.get("/order-details/:orderNumber", (req, res) => {
+    const orderNumber = req.params.orderNumber;
+    let sql = `select productid, productImage, productName, productPrice, productSize, quantity from orderdetails where orderId = '${orderNumber}';`;
+    connection.query(sql, (err, result) => {
+        if (err) console.log(err);
+        res.json(result);
+    });
+});
 
 app.listen(8080, function () {
     console.log("Listing port 8080");
