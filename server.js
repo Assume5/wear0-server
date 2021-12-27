@@ -572,7 +572,7 @@ app.post("/checkout", (req, res) => {
                     console.log(err);
                 }
             });
-
+            let productCheckOut = {}
             for (let i in productsDetail) {
                 let product = productsDetail[i];
                 const {
@@ -583,6 +583,9 @@ app.post("/checkout", (req, res) => {
                     quantity,
                     productSize,
                 } = product;
+                if(productCheckOut[productid] === undefined) {
+                    productCheckOut[productid] = 0
+                }
                 const detailSql = `INSERT INTO orderdetails VALUES('${orderId}','${productid}','${productImage}','${productName}','${productPrice}','${productSize}','${quantity}')`;
                 connection.query(detailSql, (err, result) => {
                     if (err) {
@@ -604,8 +607,18 @@ app.post("/checkout", (req, res) => {
                         });
                     }
                 );
-            }
 
+
+            }
+            //add checkout count
+
+            for(let i in productCheckOut) {
+                let addCountSql = `update products set productCheckout = productCheckout + 1 where productId = '${i}'`
+                connection.query(addCountSql, (err,result) => {
+                    if(err) console.log(err)
+                })
+            }
+            
             if (remember) {
                 const updateSql = `UPDATE USERS SET first = '${shippingAddress.firstname}', last = '${shippingAddress.lastname}', address1 = '${shippingAddress1}',
         address2 = '${shippingAddress2}', city = '${shippingCity}', state = '${shippingState}', zip = '${shippingZip}', phone = ${phone}`;
